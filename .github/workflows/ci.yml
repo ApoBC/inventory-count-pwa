@@ -1,0 +1,227 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Job 1: Linting & Type Check
+  lint:
+    runs-on: ubuntu-latest
+    name: Lint & Type Check
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20.x
+          cache: 'npm'
+
+      - name: Install dependencies
+        working-directory: apps/web
+        run: npm install
+
+      - name: Run TypeScript check
+        working-directory: apps/web
+        run: npx tsc --noEmit
+
+      - name: Run ESLint
+        working-directory: apps/web
+        run: npm run lint 2>&1 || true
+        continue-on-error: true
+
+  # Job 2: Unit Tests
+  test:
+    runs-on: ubuntu-latest
+    name: Unit Tests
+    needs: lint
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20.x
+          cache: 'npm'
+
+      - name: Install dependencies
+        working-directory: apps/web
+        run: npm install
+
+      - name: Run tests
+        working-directory: apps/web
+        run: npm run test -- --run
+
+      - name: Generate coverage
+        working-directory: apps/web
+        run: npm run test:coverage -- --run
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./apps/web/coverage/lcov.info
+          flags: unittests
+          fail_ci_if_error: false
+
+  # Job 3: Build
+  build:
+    runs-on: ubuntu-latest
+    name: Build
+    needs: test
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20.x
+          cache: 'npm'
+
+      - name: Install dependencies
+        working-directory: apps/web
+        run: npm install
+
+      - name: Build
+        working-directory: apps/web
+        run: npm run build
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: web-dist
+          path: apps/web/dist/
+          retention-days: 7
+
+  # Job 4: E2E Tests
+  e2e:
+    runs-on: ubuntu-latest
+    name: E2E Tests
+    needs: build
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20.x
+          cache: 'npm'
+
+      - name: Install dependencies
+        working-directory: apps/web
+        run: npm install
+
+      - name: Install Playwright
+        working-directory: apps/web
+        run: npx playwright install --with-deps
+
+      - name: Run E2E tests
+        working-directory: apps/web
+        run: npm run test:e2e -- --reporter=github
+        continue-on-error: true
+
+      - name: Upload report
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 30
+
+  # Job 5: Security Check
+  security:
+    runs-on: ubuntu-latest
+    name: Security Check
+    needs: lint
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20.x
+          cache: 'npm'
+
+      - name: Install dependencies
+        working-directory: apps/web
+        run: npm install
+
+      - name: Run npm audit
+        working-directory: apps/web
+        run: npm audit --audit-level=moderate || true
+        continue-on-error: true
+
+      - name: Check for secrets
+        run: |
+          if grep -r "password\|secret\|api.key" apps/web/src --include="*.ts" --include="*.tsx" | grep -v "test\|spec" | grep -v "node_modules"; then
+            echo "❌ Potential secrets found in code"
+            exit 1
+          fi
+          echo "✅ No secrets detected"
+        continue-on-error: true
+
+  # Summary Job
+  ci-result:
+    runs-on: ubuntu-latest
+    name: CI Result
+    needs: [lint, test, build, e2e, security]
+    if: always()
+
+    steps:
+      - name: Check CI status
+        run: |
+          if [ "${{ needs.lint.result }}" != "success" ] || \
+             [ "${{ needs.test.result }}" != "success" ] || \
+             [ "${{ needs.build.result }}" != "success" ]; then
+            echo "❌ CI Pipeline Failed"
+            exit 1
+          fi
+          echo "✅ CI Pipeline Passed"
+
+      - name: Comment PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const status = {
+              lint: '${{ needs.lint.result }}',
+              test: '${{ needs.test.result }}',
+              build: '${{ needs.build.result }}',
+              e2e: '${{ needs.e2e.result }}',
+              security: '${{ needs.security.result }}'
+            };
+
+            const emoji = {
+              success: '✅',
+              failure: '❌',
+              skipped: '⏭️'
+            };
+
+            const body = `## CI Pipeline Results
+- ${emoji[status.lint]} Lint & Type Check
+- ${emoji[status.test]} Unit Tests
+- ${emoji[status.build]} Build
+- ${emoji[status.e2e]} E2E Tests
+- ${emoji[status.security]} Security Check
+
+[View workflow run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+        continue-on-error: true
