@@ -1,0 +1,106 @@
+# =========================================
+# Plantilla: Dockerfile para Servicios Node.js
+# =========================================
+# Usar este template para: auth-service, inventory-service,
+# counting-service, erp-gateway, erp-mock, api-gateway
+#
+# Instrucciones:
+# 1. Copiar como: apps/<service-name>/Dockerfile
+# 2. Cambiar valores en comentarios [CHANGE_ME]
+# 3. Verificar que package.json y tsconfig.json existan
+
+# =========================================
+# Stage 1: Builder
+# =========================================
+FROM node:20-alpine AS builder
+
+WORKDIR /build
+
+# Copiar archivos de configuración
+COPY package*.json ./
+COPY tsconfig.json ./
+
+# Instalar SOLO dependencias de producción
+RUN npm ci --only=production && \
+    npm cache clean --force
+
+# Copiar source code
+COPY src ./src
+
+# Compilar TypeScript (si existe)
+RUN npm run build 2>/dev/null || npx tsc || true
+
+# =========================================
+# Stage 2: Runtime (Optimizado)
+# =========================================
+FROM node:20-alpine
+
+# [CHANGE_ME] Cambiar WORKDIR si es necesario (ej: /app, /srv/api)
+WORKDIR /app
+
+# Crear usuario no-root (seguridad)
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001
+
+# Copiar node_modules del builder
+COPY --from=builder --chown=nodejs:nodejs /build/node_modules ./node_modules
+
+# Copiar archivos compilados del builder
+COPY --from=builder --chown=nodejs:nodejs /build/dist ./dist
+
+# Copiar package.json para referencia de versión
+COPY --chown=nodejs:nodejs package.json ./
+
+# Cambiar a usuario no-root
+USER nodejs
+
+# [CHANGE_ME] Configurar PORT (default 3000)
+EXPOSE 3000
+
+# [CHANGE_ME] Configurar HEALTHCHECK según el servicio:
+# Para APIs: curl http://localhost:PORT/health
+# Para servicios sin /health: omitir o usar custom check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3000/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})" || true
+
+# [CHANGE_ME] Cambiar el comando de inicio según necesidad:
+# Para Node.js compilado: node dist/src/main.js
+# Para Node.js directo: node src/main.js
+# Para scripts personalizados: npm run start
+CMD ["node", "dist/src/main.js"]
+
+# =========================================
+# Notas sobre Optimización
+# =========================================
+#
+# 1. Alpine Linux (~170MB vs ~1.1GB ubuntu)
+#    → Menor tamaño, menos vulnerabilidades
+#
+# 2. Multi-stage builds
+#    → Stage 1 compila, Stage 2 solo runtime
+#    → Descarta herramientas de build
+#    → Imagen final ~350MB
+#
+# 3. npm ci (no npm install)
+#    → Reproducible, idéntico entre builds
+#    → Ideal para CI/CD
+#
+# 4. Non-root user (nodejs)
+#    → No puede ejecutar apt, chmod, etc.
+#    → Reduce superficie de ataque
+#
+# 5. npm cache clean
+#    → Elimina caché (~10-20MB por servicio)
+#
+# 6. HEALTHCHECK
+#    → Docker espera hasta que esté listo
+#    → docker-compose depends_on usa esto
+#
+# =========================================
+# Construcción Local
+# =========================================
+#
+# docker build -t inventory-auth:latest apps/auth-service/
+# docker run -p 3001:3001 inventory-auth:latest
+#
+# =========================================

@@ -1,0 +1,57 @@
+version: '3.8'
+
+# Docker Compose for Development
+# Run ONLY PostgreSQL and Redis
+# Services run locally with: npm run dev
+
+services:
+  # PostgreSQL
+  postgres:
+    image: postgres:16-alpine
+    container_name: inventory-postgres
+    environment:
+      POSTGRES_USER: counting
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: counting_dev
+      POSTGRES_MAX_CONNECTIONS: 50
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U counting"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    mem_limit: 256m
+    cpus: '0.5'
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: inventory-redis
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    mem_limit: 128m
+    cpus: '0.3'
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  default:
+    name: inventory-network
+    driver: bridge

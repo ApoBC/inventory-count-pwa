@@ -1,0 +1,70 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model CountingSession {
+  id          String   @id @default(cuid())
+  warehouse   String
+  location    String?
+  operatorId  String   // userId from auth-service
+  status      String   // 'OPEN' | 'CLOSED' | 'APPROVED'
+  createdAt   DateTime @default(now())
+  closedAt    DateTime?
+  approvedAt  DateTime?
+  supervisorId String?
+
+  counts           Count[]
+  inventoryJournal InventoryJournal?
+
+  @@map("counting_sessions")
+}
+
+model Count {
+  id        String   @id @default(cuid())
+  sessionId String
+  session   CountingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  clientId  String   // UUID del celular (genera el frontend)
+  itemId    String   // productId
+  qty       Int      // cantidad contada
+  synced    Boolean  @default(false)
+  timestamp DateTime @default(now())
+
+  // Idempotencia: no permitir duplicados (sessionId + clientId + itemId)
+  @@unique([sessionId, clientId, itemId])
+  @@map("counts")
+}
+
+model InventoryJournal {
+  id          String   @id @default(cuid())
+  sessionId   String   @unique
+  session     CountingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  erpJournalId String?  // ID retornado por ERP Mock/erpnext/d365
+  status      String   // 'DRAFT' | 'POSTED'
+  postedAt    DateTime?
+  createdAt   DateTime @default(now())
+
+  lines InventoryJournalLine[]
+
+  @@map("inventory_journals")
+}
+
+model InventoryJournalLine {
+  id        String   @id @default(cuid())
+  journalId String
+  journal   InventoryJournal @relation(fields: [journalId], references: [id], onDelete: Cascade)
+
+  itemId    String
+  diff      Int      // Puede ser positivo o negativo
+
+  @@map("inventory_journal_lines")
+}

@@ -1,0 +1,290 @@
+📦 PROYECTO 05: APP DE CONTEO DE INVENTARIO (PWA)
+═══════════════════════════════════════════════════════════════
+
+📂 ESTRUCTURA DE CARPETAS CREADA
+─────────────────────────────────────────────────────────────
+
+05-app-conteo-inventario/
+│
+├── 📄 README.md                    ✓ Descripción del proyecto
+├── 📄 QUICKSTART.md                ✓ Guía de inicio en 30 min
+├── 📄 MODULOS.md                   ✓ Checklist de 9 fases de implementación
+├── 📄 ESTRUCTURA.txt               ✓ Este archivo
+├── 📄 package.json                 ✓ pnpm workspaces
+├── 📄 .env.example                 ✓ Variables de entorno
+│
+├── 📁 apps/
+│   ├── 📁 web/                     → PWA React con Vite
+│   │   ├── public/manifest.webmanifest
+│   │   └── src/
+│   │       ├── features/
+│   │       │   ├── scanner/        → Escaneo de códigos
+│   │       │   ├── counting/       → Ingreso de cantidad
+│   │       │   ├── sessions/       → Gestión de sesiones
+│   │       │   └── supervisor/     → Aprobación y envío
+│   │       ├── offline/
+│   │       │   ├── db.ts           → IndexedDB con Dexie
+│   │       │   └── sync-queue.ts   → Cola de sincronización
+│   │       └── sw.ts               → Service Worker
+│   │
+│   ├── 📁 auth-service/            → JWT + Autenticación (NestJS/Express)
+│   │   └── src/
+│   │
+│   ├── 📁 inventory-service/       → Stock + Catálogo (Node.js)
+│   │   └── src/
+│   │
+│   ├── 📁 counting-service/        → Sesiones + Conteos (Node.js)
+│   │   └── src/
+│   │       ├── controllers/
+│   │       ├── services/
+│   │       └── models/
+│   │
+│   ├── 📁 erp-gateway/             → Adaptadores ERP (Node.js)
+│   │   └── src/
+│   │       └── adapters/
+│   │
+│   ├── 📁 erp-mock/                → OData simulado (Express)
+│   │   └── src/
+│   │       ├── data/
+│   │       └── routes/
+│   │
+│   └── 📁 api-gateway/             → Nginx/Node.js (entrada única)
+│       └── src/
+│
+├── 📁 packages/
+│   └── 📁 shared/                  → DTOs + Tipos TS compartidas
+│       └── src/
+│           ├── types.ts
+│           └── dtos.ts
+│
+├── 📁 infra/
+│   ├── 📄 docker-compose.yml       ✓ Orquestación de servicios
+│   └── 📁 nginx/
+│       ├── nginx.conf              → Configuración proxy
+│       └── certs/                  → Certificados SSL local
+│
+├── 📁 docs/
+│   ├── 📄 arquitectura.md          ✓ Diseño de sistema
+│   └── 📁 diagramas/               → Diagramas de flujo
+│
+└── 📁 .github/
+    └── 📁 workflows/
+        ├── test.yml                → CI: lint + test
+        └── build.yml               → Build Docker
+
+
+📋 ARCHIVOS PRINCIPALES CREADOS
+─────────────────────────────────────────────────────────────
+
+✓ README.md
+  • Descripción general
+  • Stack de tecnologías
+  • Estructura del proyecto
+  • Roadmap de 8 etapas
+  • Microservicios
+  • Características clave
+  • Herramientas necesarias
+
+✓ QUICKSTART.md
+  • Instalación (5 min)
+  • Levantar Docker (2 min)
+  • Inicializar BD (5 min)
+  • Levantar servicios (8 min)
+  • Acceder a la app (2 min)
+  • Flujo de prueba (5 min)
+  • Troubleshooting
+
+✓ MODULOS.md
+  • 9 fases detalladas
+  • Módulos a implementar en cada fase
+  • Endpoints exactos
+  • Tests que escribir
+  • Entregables por fase
+  • Priorización por impacto en CV
+
+✓ package.json
+  • pnpm workspaces
+  • Scripts: dev, build, test, lint, format
+  • Scripts Docker: compose:up, compose:down, compose:logs
+
+✓ .env.example
+  • PostgreSQL
+  • Redis
+  • JWT
+  • ERP Provider
+  • URLs internas
+
+✓ docker-compose.yml
+  • PostgreSQL 16
+  • Redis
+  • 7 servicios Node.js
+  • Networking + health checks
+  • Volumes para persistencia
+
+
+🎯 FASES DE IMPLEMENTACIÓN (Del MODULOS.md)
+─────────────────────────────────────────────────────────────
+
+FASE 0: Setup Inicial (1 día)
+  └─ Docker, monorepo, CI/CD, shared types
+
+FASE 1: ERP Mock + Gateway (1 día)
+  ├─ apps/erp-mock:    OData simulado con 30 productos
+  └─ apps/erp-gateway: Adaptador que los consume
+
+FASE 2: Auth Service (1 día)
+  └─ apps/auth-service: JWT, login, refresh tokens
+
+FASE 3: Inventory Service (1-2 días)
+  └─ apps/inventory-service: Stock + caché Redis
+
+FASE 4: Counting Service (2-3 días) ← CRÍTICO
+  └─ apps/counting-service: Sesiones, upsert idempotente, diferencias
+
+FASE 5: API Gateway (1 día)
+  └─ apps/api-gateway: Punto entrada, rate limiting
+
+FASE 6: PWA Frontend (2-3 días)
+  ├─ Base: React + Vite + PWA
+  ├─ Login: Auth + protected routes
+  ├─ Scanner: Cámara + @zxing + Dexie
+  ├─ Offline: IndexedDB + sync-queue
+  └─ Supervisor: Diferencias + aprobación
+
+FASE 7: Tests & Quality (1 día)
+  └─ 80%+ coverage + linting
+
+FASE 8: Docker & Deploy (1 día)
+  └─ Dockerfiles + CI/CD
+
+FASE 9: Demo & Docs (1 día)
+  └─ Video + README final
+
+
+🔑 PUNTOS CLAVE
+─────────────────────────────────────────────────────────────
+
+1. IDEMPOTENCIA (CRÍTICA en counting-service)
+   └─ clientId + upsert en BD = sin duplicados por reintentos
+
+2. OFFLINE-FIRST
+   └─ IndexedDB guarda conteos → sync-queue sincroniza al conectar
+
+3. MICROSERVICIOS DESACOPLADOS
+   └─ Cada servicio en su propio puerto y BD (si es necesario)
+
+4. ADAPTADOR DE ERP
+   └─ Mock → ERPNext → D365 (solo cambiar ERP_PROVIDER env var)
+
+5. PWA INSTALABLE
+   └─ Se instala como app nativa en Android/iOS
+
+
+📊 STACK ELEGIDO
+─────────────────────────────────────────────────────────────
+
+Frontend:
+  • React 18 + Vite + TypeScript
+  • Tailwind CSS + shadcn/ui
+  • Dexie.js (IndexedDB)
+  • @zxing/browser (escaneo)
+  • vite-plugin-pwa (PWA + Service Worker)
+  • React Hook Form + Zod
+
+Backend:
+  • Node.js 20 LTS
+  • NestJS o Express
+  • Prisma (ORM)
+  • PostgreSQL 16
+
+Infraestructura:
+  • Redis (caché + colas)
+  • Docker + Docker Compose
+  • Nginx (reverse proxy)
+  • GitHub Actions (CI/CD)
+
+Testing:
+  • Vitest (frontend)
+  • Jest + Supertest (backend)
+  • Objetivo: 80%+ coverage
+
+
+🚀 PRÓXIMOS PASOS
+─────────────────────────────────────────────────────────────
+
+1. Leer QUICKSTART.md para entender cómo ejecutar
+
+2. Leer MODULOS.md para ver la lista completa de módulos
+
+3. Leer docs/arquitectura.md para entender el diseño
+
+4. Comenzar FASE 0:
+   - Crear .gitignore
+   - Crear .github/workflows/
+
+5. Comenzar FASE 1:
+   - Implementar apps/erp-mock
+   - Implementar apps/erp-gateway
+
+6. Continuar secuencialmente según MODULOS.md
+
+7. Grabar video demo cuando esté todo listo
+
+8. Pushear a GitHub y compartir en CV
+
+
+📱 PARA EL PORTAFOLIO
+─────────────────────────────────────────────────────────────
+
+Descripción en 2 líneas (CV):
+  "Aplicación PWA offline-first para conteo de inventario en almacén
+   (React, IndexedDB, Service Workers, Node.js). Escaneo de códigos de
+   barras, sincronización idempotente, flujo de aprobación y envío de
+   ajustes a ERP mediante microservicios."
+
+Tecnologías destacadas:
+  ✓ PWA con soporte offline
+  ✓ Escaneo de códigos por cámara
+  ✓ Microservicios desacoplados
+  ✓ Integración ERP (adaptador intercambiable)
+  ✓ Sincronización idempotente
+  ✓ Dockerización completa
+  ✓ CI/CD en GitHub Actions
+
+Diferenciales:
+  • Offline-first con sincronización automática
+  • Arquitectura hexagonal (adaptadores)
+  • Tests con 80%+ coverage
+  • PWA instalable en celular
+
+
+💡 TIPS
+─────────────────────────────────────────────────────────────
+
+• Usar branch `develop` para cambios, `main` solo para releases
+• Hacer commits pequeños y significativos
+• Escribir tests ANTES de implementar (TDD)
+• Usar TypeScript en todos los servicios
+• No commit de .env, solo .env.example
+• Usar eslint + prettier en pre-commit hook
+• Grabar video desde celular físico (no emulador)
+• Usar mkcert para HTTPS local si necesitas probar cámara
+
+
+🎓 REFERENCIA
+─────────────────────────────────────────────────────────────
+
+Guía general:     ../00-guia-general.md
+Arquitectura:     ./docs/arquitectura.md
+Módulos:          ./MODULOS.md
+Quickstart:       ./QUICKSTART.md
+Este archivo:     ./ESTRUCTURA.txt
+
+
+═══════════════════════════════════════════════════════════════
+
+Última actualización: 2026-10-02
+Autor: Bill Castillo
+Email: billcastillo99@gmail.com
+
+✨ ¡Listo para comenzar! Abre QUICKSTART.md para el primer paso.

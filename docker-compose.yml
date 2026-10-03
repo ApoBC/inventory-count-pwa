@@ -1,0 +1,204 @@
+version: '3.8'
+
+services:
+  # PostgreSQL - 256MB heap
+  postgres:
+    image: postgres:16-alpine
+    container_name: inventory-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-counting}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
+      POSTGRES_DB: ${DB_NAME:-counting_dev}
+      POSTGRES_MAX_CONNECTIONS: 50
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-counting}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    mem_limit: 256m
+    cpus: '0.5'
+
+  # Redis - 128MB max
+  redis:
+    image: redis:7-alpine
+    container_name: inventory-redis
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    mem_limit: 128m
+    cpus: '0.3'
+
+  # Auth Service
+  auth-service:
+    build:
+      context: ./apps/auth-service
+      dockerfile: Dockerfile
+    container_name: inventory-auth-service
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3001
+      DATABASE_URL: postgresql://${DB_USER:-counting}:${DB_PASSWORD:-secret}@postgres:5432/${DB_NAME:-counting_dev}
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-key-change-in-prod}
+      JWT_EXPIRES_IN: 24h
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    mem_limit: 256m
+    cpus: '0.5'
+
+  # Inventory Service
+  inventory-service:
+    build:
+      context: ./apps/inventory-service
+      dockerfile: Dockerfile
+    container_name: inventory-service
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3002
+      DATABASE_URL: postgresql://${DB_USER:-counting}:${DB_PASSWORD:-secret}@postgres:5432/${DB_NAME:-counting_dev}
+      REDIS_URL: redis://redis:6379
+      ERP_GATEWAY_URL: http://erp-gateway:3004
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "3002:3002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      erp-gateway:
+        condition: service_started
+    restart: unless-stopped
+    mem_limit: 256m
+    cpus: '0.5'
+
+  # Counting Service
+  counting-service:
+    build:
+      context: ./apps/counting-service
+      dockerfile: Dockerfile
+    container_name: inventory-counting-service
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3003
+      DATABASE_URL: postgresql://${DB_USER:-counting}:${DB_PASSWORD:-secret}@postgres:5432/${DB_NAME:-counting_dev}
+      INVENTORY_SERVICE_URL: http://inventory-service:3002
+      ERP_GATEWAY_URL: http://erp-gateway:3004
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "3003:3003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      inventory-service:
+        condition: service_started
+    restart: unless-stopped
+    mem_limit: 256m
+    cpus: '0.5'
+
+  # ERP Gateway
+  erp-gateway:
+    build:
+      context: ./apps/erp-gateway
+      dockerfile: Dockerfile
+    container_name: inventory-erp-gateway
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3004
+      ERP_PROVIDER: ${ERP_PROVIDER:-mock}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "3004:3004"
+    depends_on:
+      - erp-mock
+    restart: unless-stopped
+    mem_limit: 128m
+    cpus: '0.3'
+
+  # ERP Mock
+  erp-mock:
+    build:
+      context: ./apps/erp-mock
+      dockerfile: Dockerfile
+    container_name: inventory-erp-mock
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3005
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "3005:3005"
+    restart: unless-stopped
+    mem_limit: 128m
+    cpus: '0.3'
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: ./apps/api-gateway
+      dockerfile: Dockerfile
+    container_name: inventory-api-gateway
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3000
+      AUTH_SERVICE_URL: http://auth-service:3001
+      INVENTORY_SERVICE_URL: http://inventory-service:3002
+      COUNTING_SERVICE_URL: http://counting-service:3003
+      ERP_GATEWAY_URL: http://erp-gateway:3004
+      ERP_MOCK_URL: http://erp-mock:3005
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - auth-service
+      - inventory-service
+      - counting-service
+      - erp-gateway
+      - erp-mock
+    restart: unless-stopped
+    mem_limit: 128m
+    cpus: '0.3'
+
+  # Web App
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    container_name: inventory-web
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api-gateway
+    restart: unless-stopped
+    mem_limit: 128m
+    cpus: '0.3'
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  default:
+    name: inventory-network
+    driver: bridge

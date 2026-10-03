@@ -1,0 +1,41 @@
+{
+  "name": "inventory-count-app",
+  "version": "0.1.0",
+  "description": "PWA offline-first para conteo de inventario en almacén",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel run dev",
+    "build": "pnpm -r --parallel run build",
+    "test": "pnpm -r --parallel run test",
+    "test:coverage": "pnpm -r --parallel run test:coverage",
+    "lint": "pnpm -r run lint",
+    "format": "pnpm -r run format",
+    "format:check": "pnpm -r run format:check",
+    "db:migrate": "cd apps/counting-service && pnpm db:migrate",
+    "db:seed": "cd apps/counting-service && pnpm db:seed",
+    "compose:up": "docker compose -f infra/docker-compose.yml up",
+    "compose:down": "docker compose -f infra/docker-compose.yml down",
+    "compose:logs": "docker compose -f infra/docker-compose.yml logs -f"
+  },
+  "pnpm": {
+    "peerDependencyRules": {
+      "ignoreMissing": [
+        "react",
+        "react-dom"
+      ]
+    }
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0"
+  }
+}
